@@ -2,9 +2,9 @@
 // character collections to Unicode, for fonts that give no other way to
 // read their text: no ToUnicode map, and a font program with no cmap.
 //
-// The tables are derived from Adobe's Unicode CMaps (github.com/
-// adobe-type-tools/cmap-resources, BSD-3-Clause; see data/NOTICE) by
-// internal/gen, and decoded on first use, one collection at a time.
+// GB1 uses Adobe's PDF CID-to-Unicode mapping, including variation sequences.
+// Other tables use Adobe's Unicode CMaps; see data/NOTICE. Tables are generated
+// by internal/gen and decoded on first use, one collection at a time.
 package cjk
 
 import (
@@ -12,12 +12,13 @@ import (
 	"compress/gzip"
 	"embed"
 	"encoding/binary"
+	"encoding/json"
 	"io"
 	"slices"
 	"sync"
 )
 
-//go:embed data/*.bin
+//go:embed data/*.bin data/GB1_sequences.json
 var data embed.FS
 
 // run is a span of consecutive CIDs whose characters are consecutive
@@ -29,24 +30,34 @@ type run struct {
 }
 
 type table struct {
-	once sync.Once
-	runs []run
+	once      sync.Once
+	runs      []run
+	sequences map[uint32]string
 }
 
 var tables = map[string]*table{
 	"Japan1": {}, "GB1": {}, "CNS1": {}, "Korea1": {}, "KR": {},
 }
 
-// Unicode returns the character of cid in the Adobe collection named by
-// ordering — Japan1, GB1, CNS1, Korea1, or KR — and whether it has one.
-// CIDs for vertical, rotated, and proportional variants of a character
-// have none; their horizontal forms do.
-func Unicode(ordering string, cid uint32) (rune, bool) {
+// Unicode returns the Unicode text of cid in the Adobe collection named by
+// ordering — Japan1, GB1, CNS1, Korea1, or KR — and whether it has a mapping.
+func Unicode(ordering string, cid uint32) (string, bool) {
 	t, ok := tables[ordering]
 	if !ok {
-		return 0, false
+		return "", false
 	}
-	t.once.Do(func() { t.runs = load(ordering) })
+	t.once.Do(func() {
+		t.runs = load(ordering)
+		if ordering == "GB1" {
+			raw, err := data.ReadFile("data/GB1_sequences.json")
+			if err != nil || json.Unmarshal(raw, &t.sequences) != nil {
+				panic("invalid built-in GB1 sequences")
+			}
+		}
+	})
+	if text, ok := t.sequences[cid]; ok {
+		return text, true
+	}
 	i, found := slices.BinarySearchFunc(t.runs, cid, func(r run, cid uint32) int {
 		switch {
 		case r.cid+r.length <= cid:
@@ -57,9 +68,9 @@ func Unicode(ordering string, cid uint32) (rune, bool) {
 		return 0
 	})
 	if !found {
-		return 0, false
+		return "", false
 	}
-	return t.runs[i].r + rune(cid-t.runs[i].cid), true //nolint:gosec // within a run's length
+	return string(t.runs[i].r + rune(cid-t.runs[i].cid)), true //nolint:gosec // within a run's length
 }
 
 // Known reports whether ordering names a collection Unicode covers.

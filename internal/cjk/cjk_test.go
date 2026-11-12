@@ -20,7 +20,7 @@ func TestUnicode(t *testing.T) {
 		{"KR", 221, '가'},
 	} {
 		got, ok := Unicode(tc.ordering, tc.cid)
-		if !ok || got != tc.want {
+		if !ok || got != string(tc.want) {
 			t.Errorf("Unicode(%s, %d) = %q, %v; want %q", tc.ordering, tc.cid, got, ok, tc.want)
 		}
 	}

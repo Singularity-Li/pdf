@@ -3,7 +3,9 @@
 //
 //	go run ./internal/cjk/internal/gen <dir holding Uni*-UTF32-H>
 //
-// Each UTF-32 CMap maps Unicode to the collection's CIDs; inverted, with
+// GB1 is generated from data/Adobe-GB1-UCS2 with --gb1 (or after the other
+// collections). This PDF-specific mapping preserves alternate CIDs and strings.
+// Each other UTF-32 CMap maps Unicode to the collection's CIDs; inverted, with
 // the lowest code point kept where several map to one CID — the unified
 // ideograph over its compatibility forms — it gives each CID its
 // character. A table is stored as runs of CIDs whose code points ascend
@@ -28,13 +30,18 @@ import (
 
 var collections = map[string]string{
 	"Japan1": "UniJIS-UTF32-H",
-	"GB1":    "UniGB-UTF32-H",
 	"CNS1":   "UniCNS-UTF32-H",
 	"Korea1": "UniKS-UTF32-H",
 	"KR":     "UniAKR-UTF32-H",
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--gb1" {
+		if err := generateGB1(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if len(os.Args) != 2 {
 		log.Fatal("usage: gen <dir holding the Uni*-UTF32-H CMaps>")
 	}
@@ -52,6 +59,9 @@ func main() {
 			log.Fatal(err)
 		}
 		fmt.Printf("%s: %d CIDs\n", ordering, len(table))
+	}
+	if err := generateGB1(); err != nil {
+		log.Fatal(err)
 	}
 }
 

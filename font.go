@@ -733,7 +733,7 @@ func (f *fontInfo) mapComposite(key codeKey, cid uint32) string {
 	}
 	if f.collection != "" {
 		if r, ok := cjk.Unicode(f.collection, cid); ok {
-			return string(r)
+			return r
 		}
 	}
 	return "�"

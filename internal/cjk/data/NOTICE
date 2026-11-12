@@ -1,4 +1,10 @@
-The *.bin tables are derived from the Unicode CMaps (Uni*-UTF32-H) of
+GB1.bin and GB1_sequences.json are generated from Adobe-GB1-UCS2 Version 9.000:
+https://github.com/adobe-type-tools/mapping-resources-pdf/blob/2dd5e53fb74a01718b9dfd448a0d1cce6fff2aa5/pdf2unicode/Adobe-GB1-UCS2
+Source SHA256: 368b40ec05568faf323cfbbddf23c60d566bbc88e366981eb6541b026381a3b8
+The complete source and its original license are retained in Adobe-GB1-UCS2.
+Regenerate GB1 from the repository root: go run ./internal/cjk/internal/gen --gb1
+
+The other *.bin tables are derived from the Unicode CMaps (Uni*-UTF32-H) of
 Adobe's cmap-resources, https://github.com/adobe-type-tools/cmap-resources,
 by ../internal/gen. They are distributed under the following license.
 
