@@ -123,12 +123,16 @@ type Page struct {
 	// read it; a page that paints none has had its text converted to
 	// vector outlines, which needs a renderer instead, or is simply
 	// blank. Nothing else in the result tells those apart.
-	ImageCount  int
-	MediaBox    Rect
-	CropBox     Rect
-	Rotation    int
-	Annotations []Annotation
-	Warnings    []Warning
+	ImageCount int
+	// TextRenderModes is a bitset of rendering modes used by non-empty text
+	// show operations with a font, including Form and annotation appearances.
+	// Bit n denotes PDF Tr mode n. External OCR glyphs are not included.
+	TextRenderModes uint8
+	MediaBox        Rect
+	CropBox         Rect
+	Rotation        int
+	Annotations     []Annotation
+	Warnings        []Warning
 
 	layout LayoutOptions
 }
@@ -397,6 +401,7 @@ func (e *pageExtractor) extract(state *pageState, pageNode object.Value, pageNum
 	}
 	page.Glyphs = state.glyphs.take()
 	page.ImageCount = w.imageCount
+	page.TextRenderModes = w.textRenderModes
 
 	// Image data is read only once it is known to be wanted: by the
 	// caller, or by the OCR implementation for a page the policy selects.
@@ -853,14 +858,15 @@ func scaleY(m matrix) float64 { return math.Hypot(m[2], m[3]) }
 // gstate is the graphics state saved/restored by q/Q. The text matrix is
 // not part of it (it lives only between BT/ET).
 type gstate struct {
-	ctm      matrix
-	font     *fontInfo
-	fontSize float64
-	charSp   float64
-	wordSp   float64
-	leading  float64
-	rise     float64
-	hscale   float64
+	ctm            matrix
+	font           *fontInfo
+	fontSize       float64
+	charSp         float64
+	wordSp         float64
+	leading        float64
+	rise           float64
+	hscale         float64
+	textRenderMode uint8
 }
 
 const maxFormDepth = 8
@@ -918,9 +924,10 @@ type walker struct {
 	// an OCR request; their data is read afterwards by loadImages.
 	// imageCount counts them either way, and so is kept separately: it
 	// is reported for every page, and images is not.
-	collectImages bool
-	images        []pageImage
-	imageCount    int
+	collectImages   bool
+	images          []pageImage
+	imageCount      int
+	textRenderModes uint8
 }
 
 // docScratch holds buffers that page walks reuse across the pages of a
@@ -1066,6 +1073,9 @@ func (w *walker) walkStream(strm, resources object.Value, gs gstate) error {
 		if f == nil {
 			return nil
 		}
+		if len(raw) > 0 {
+			w.textRenderModes |= 1 << gs.textRenderMode
+		}
 		decodedBuf = f.appendDecoded(decodedBuf[:0], raw)
 		if embeddedErr := f.embeddedFailure(); embeddedErr != nil && !warnedEmbedded[f] {
 			// Reported here rather than at Tf: the program is parsed only
@@ -1185,6 +1195,11 @@ func (w *walker) walkStream(strm, resources object.Value, gs gstate) error {
 				return malformedOperator(string(op))
 			}
 			tm, tlm = identity, identity
+		case "Tr":
+			if !operandsAre(args, opNum) || args[0].num < 0 || args[0].num > 7 || math.Trunc(args[0].num) != args[0].num {
+				return malformedOperator("Tr")
+			}
+			gs.textRenderMode = uint8(args[0].num) // validated as an integer in 0..7
 		case "Tf":
 			if !operandsAre(args, opName, opNum) {
 				return malformedOperator("Tf")
