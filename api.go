@@ -250,6 +250,11 @@ type FormField struct {
 	Page          int
 }
 
+// ErrUseBuiltinCMap lets a CMapResolver explicitly request the strict built-in
+// UniGB-UCS2-H decoder. Other names and inherited CMaps remain unsupported.
+// It reads Unicode codes with the font's default non-ASCII widths, not CIDs.
+var ErrUseBuiltinCMap = errors.New("use strict built-in CMap")
+
 // CMapResolver supplies a named predefined CMap that is not built into the
 // package. The returned bytes use normal PDF CMap syntax. Without one, the
 // predefined Unicode CMaps still read, from their codes, with the font's

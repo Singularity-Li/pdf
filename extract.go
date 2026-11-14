@@ -1073,6 +1073,11 @@ func (w *walker) walkStream(strm, resources object.Value, gs gstate) error {
 		if f == nil {
 			return nil
 		}
+		if f.encoding != nil {
+			if err := f.encoding.validateUCS2(raw); err != nil {
+				return w.warning(WarningMalformedPage, err)
+			}
+		}
 		if len(raw) > 0 {
 			w.textRenderModes |= 1 << gs.textRenderMode
 		}

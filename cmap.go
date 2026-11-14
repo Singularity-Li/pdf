@@ -35,6 +35,7 @@ type cmapData struct {
 	// unicodeForm is set for the predefined Unicode CMaps read without
 	// their data: the code is itself the text, in this form.
 	unicodeForm unicodeForm
+	strictUCS2  bool
 }
 
 // unicodeForm is how a Unicode CMap's codes spell their characters.
@@ -118,6 +119,12 @@ func resolveCMap(name string, resolver CMapResolver, seen map[string]bool) (*cma
 	}
 	seen[name] = true
 	data, err := resolver(name)
+	if errors.Is(err, ErrUseBuiltinCMap) && name == "UniGB-UCS2-H" {
+		delete(seen, name)
+		cmap := unicodeCMap(name)
+		cmap.strictUCS2 = true
+		return cmap, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("resolve CMap %q: %w", name, err)
 	}
@@ -224,6 +231,8 @@ func parseCMap(data []byte, resolver CMapResolver, seen map[string]bool) (*cmapD
 			base, err := resolveCMap(name, resolver, seen)
 			if err != nil {
 				parseErr = err
+			} else if base.strictUCS2 {
+				parseErr = errors.New("strict UniGB-UCS2-H requires a directly named Encoding")
 			} else {
 				out.inherit(base)
 			}
@@ -343,6 +352,23 @@ func makeCodeKey(raw []byte) (codeKey, bool) {
 		return codeKey{}, false
 	}
 	return codeKey{value: beUint(raw), bytes: uint8(len(raw))}, true //nolint:gosec // validated as 1..4
+}
+
+// Validate each PDF string before layout sanitization can hide malformed codes.
+func (c *cmapData) validateUCS2(raw []byte) error {
+	if !c.strictUCS2 {
+		return nil
+	}
+	if len(raw)%2 != 0 {
+		return errors.New("UniGB-UCS2-H string has an incomplete two-byte code")
+	}
+	for i := 0; i < len(raw); i += 2 {
+		value := uint16(raw[i])<<8 | uint16(raw[i+1])
+		if value >= 0xd800 && value <= 0xdfff {
+			return errors.New("UniGB-UCS2-H string contains a surrogate code")
+		}
+	}
+	return nil
 }
 
 func (c *cmapData) nextCode(raw []byte) (codeKey, int) {
